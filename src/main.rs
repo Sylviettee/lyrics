@@ -21,7 +21,10 @@ async fn main() {
 
     println!("\n---\n");
 
-    let hero_lyrics = genius.get_lyrics("https://genius.com/Mili-jpn-hero-lyrics").await.unwrap();
+    let hero_lyrics = genius
+        .get_lyrics("https://genius.com/Mili-jpn-hero-lyrics")
+        .await
+        .unwrap();
 
     println!("{hero_lyrics}")
 }

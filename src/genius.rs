@@ -1,4 +1,4 @@
-use html_editor::{operation::*, Element, Node};
+use html_editor::{Element, Node, operation::*};
 use reqwest::Client;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
@@ -35,7 +35,6 @@ impl Searchable for Song {
 #[derive(Deserialize)]
 struct Artist {
     id: usize,
-    name: String,
 }
 
 impl Searchable for Artist {
@@ -69,7 +68,7 @@ pub enum Error {
     #[error("failed to send request: {0}")]
     Reqwest(#[from] reqwest::Error),
     #[error("genius replied with error: {0}")]
-    Genius(String),
+    Genius(usize, String),
     #[error("failed to find lyrics")]
     LyricsNotFound,
     #[error("entity was not found")]
@@ -113,11 +112,16 @@ impl Genius {
             return Ok(body);
         }
 
-        if let Some(msg) = json.meta.message {
-            return Err(Error::Genius(msg.clone()));
+        let meta = &json.meta;
+
+        if let Some(ref msg) = meta.message {
+            return Err(Error::Genius(meta.status, msg.clone()));
         }
 
-        Err(Error::Genius(String::from("Something went wrong")))
+        Err(Error::Genius(
+            meta.status,
+            String::from("Something went wrong"),
+        ))
     }
 
     fn filter_search<T: Searchable>(results: SearchResults) -> Option<Vec<T>> {
@@ -213,8 +217,8 @@ impl Genius {
                 Node::Doctype(_) => {}
                 Node::Text(t) => buff.push_str(t),
                 Node::Element(e) => {
-                    if e.name == "div"  {
-                        continue
+                    if e.name == "div" {
+                        continue;
                     }
 
                     if e.name == "br" {
@@ -222,7 +226,7 @@ impl Genius {
                     } else {
                         buff.push_str(&Self::get_text(&e.children));
                     }
-                },
+                }
             }
         }
 
@@ -234,14 +238,17 @@ impl Genius {
 
         let dom = html_editor::try_parse(&html);
 
-        let root = dom.query(&Selector::from("#lyrics-root")).ok_or(Error::LyricsNotFound)?;
+        let root = dom
+            .query(&Selector::from("#lyrics-root"))
+            .ok_or(Error::LyricsNotFound)?;
 
         let lyrics = root
             .children
             .iter()
             .filter_map(|n| n.as_element())
             .filter_map(|e| {
-                let is_lyrics = e.attrs
+                let is_lyrics = e
+                    .attrs
                     .iter()
                     .any(|(k, v)| k == "data-lyrics-container" && v == "true");
 
