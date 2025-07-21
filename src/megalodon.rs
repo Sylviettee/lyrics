@@ -33,7 +33,7 @@ pub async fn post(
         LyricSong,
         "SELECT lyrics.id, lyrics.contents, songs.artists_names, songs.name
         FROM lyrics
-        JOIN songs ON lyrics.id=songs.id
+        JOIN songs ON lyrics.song_id=songs.id
         WHERE presented = FALSE
         ORDER BY RANDOM()
         LIMIT 1"
