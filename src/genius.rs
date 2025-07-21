@@ -21,11 +21,11 @@ trait Searchable: DeserializeOwned {
 }
 
 #[derive(Deserialize)]
-struct Song {
+pub struct Song {
+    pub artist_names: String,
+    pub title: String,
     id: usize,
-    artist_names: String,
     path: String,
-    title: String,
 }
 
 impl Searchable for Song {
@@ -57,6 +57,11 @@ struct Section {
 #[derive(Deserialize)]
 struct SearchResults {
     sections: Vec<Section>,
+}
+
+#[derive(Deserialize)]
+struct SongsResults {
+    songs: Vec<Song>,
 }
 
 #[derive(Debug, Error)]
@@ -91,7 +96,7 @@ impl Genius {
         let url = if public {
             format!("https://genius.com/api/{route}")
         } else {
-            format!("https://api/genius.com/{route}")
+            format!("https://api.genius.com/{route}")
         };
 
         let mut req = self.client.get(url).query(query);
@@ -140,5 +145,60 @@ impl Genius {
         } else {
             Err(Error::NotFound)
         }
+    }
+
+    async fn get_artist_songs_paginated(
+        &self,
+        artist_id: usize,
+        page: usize,
+        per_page: usize,
+    ) -> Result<Vec<Song>, Error> {
+        let songs: SongsResults = self
+            .request(
+                false,
+                &format!("artists/{artist_id}/songs"),
+                &[("page", page), ("per_page", per_page)],
+            )
+            .await?;
+
+        Ok(songs.songs)
+    }
+
+    pub async fn get_artist_songs(
+        &self,
+        artist_id: usize,
+        count: Option<usize>,
+    ) -> Result<Vec<Song>, Error> {
+        let per_page = if let Some(count) = count {
+            if count > 50 { 50 } else { count }
+        } else {
+            50
+        };
+
+        let mut songs = Vec::new();
+
+        let mut page = 1;
+
+        loop {
+            let page_songs = self
+                .get_artist_songs_paginated(artist_id, page, per_page)
+                .await?;
+            let len = page_songs.len();
+
+            songs.extend(page_songs);
+
+            if len != per_page {
+                // last page
+                break;
+            }
+
+            page += 1;
+        }
+
+        if let Some(count) = count {
+            songs.truncate(count);
+        }
+
+        Ok(songs)
     }
 }
