@@ -37,7 +37,10 @@ async fn load_artist(
 
     // TODO; evaluate running in parallel (will this API-ban us?)
     for song in songs {
-        info!("fetching lyrics for {}", song.title);
+        info!(
+            "fetching lyrics for {} by {}",
+            song.title, song.artist_names
+        );
 
         let lyrics = genius.get_lyrics(&song.url).await?;
 
@@ -87,4 +90,27 @@ pub async fn load_lyrics(
     }
 
     Ok(())
+}
+
+pub async fn is_initialized(conn: &mut SqliteConnection, artists: &[&str]) -> Result<bool, Error> {
+    let mut in_clause = Vec::new();
+
+    for _artist in artists {
+        in_clause.push("?");
+    }
+
+    let q = format!(
+        "SELECT name FROM artists WHERE name IN ({})",
+        in_clause.join(", ")
+    );
+
+    let mut req = query(&q);
+
+    for artist in artists {
+        req = req.bind(artist);
+    }
+
+    let res = req.fetch_all(&mut *conn).await?;
+
+    Ok(res.len() == artists.len())
 }
