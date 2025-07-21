@@ -1,4 +1,5 @@
 use megalodon::{SNS, entities::StatusVisibility, megalodon::PostStatusInputOptions};
+use serde::Deserialize;
 use sqlx::{SqliteConnection, query, query_as};
 
 use crate::error::Error;
@@ -10,15 +11,21 @@ struct LyricSong {
     pub name: String,
 }
 
+#[derive(Deserialize)]
 pub struct Config {
     pub access_token: String,
     pub instance: String,
     pub sns: SNS,
     pub visibility: Option<StatusVisibility>,
+    pub cw: Option<String>,
 }
 
 #[allow(clippy::result_large_err)]
-pub async fn post(conn: &mut SqliteConnection, config: Config, dry: bool) -> Result<String, Error> {
+pub async fn post(
+    conn: &mut SqliteConnection,
+    config: Config,
+    include_artist: bool,
+) -> Result<(), Error> {
     let client =
         megalodon::generator(config.sns, config.instance, Some(config.access_token), None)?;
 
@@ -34,20 +41,21 @@ pub async fn post(conn: &mut SqliteConnection, config: Config, dry: bool) -> Res
     .fetch_one(&mut *conn)
     .await?;
 
-    let status = format!(
-        "{}\n<small>{} by {}</small>",
-        lyric.contents, lyric.name, lyric.artists_names
-    );
-
-    if dry {
-        return Ok(status);
-    }
+    let status = if include_artist {
+        format!(
+            "{}\n<small>from {} by {}</small>",
+            lyric.contents, lyric.name, lyric.artists_names
+        )
+    } else {
+        format!("{}\n<small>from {}</small>", lyric.contents, lyric.name)
+    };
 
     client
         .post_status(
             status,
             Some(&PostStatusInputOptions {
                 visibility: config.visibility,
+                spoiler_text: config.cw,
                 ..Default::default()
             }),
         )
@@ -57,5 +65,5 @@ pub async fn post(conn: &mut SqliteConnection, config: Config, dry: bool) -> Res
         .execute(&mut *conn)
         .await?;
 
-    Ok(String::new())
+    Ok(())
 }

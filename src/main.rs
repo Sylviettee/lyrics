@@ -1,14 +1,12 @@
-use std::env;
-
-use ::megalodon::SNS;
 use color_eyre::eyre::Result;
 use env_logger::Env;
 use log::info;
+use serde::Deserialize;
 use sqlx::{Connection, SqliteConnection};
 
 use crate::{
     load::{is_initialized, load_lyrics},
-    megalodon::{Config, post},
+    megalodon::post,
 };
 
 mod error;
@@ -16,38 +14,41 @@ mod genius;
 mod load;
 mod megalodon;
 
+serde_with::with_prefix!(prefix_fediverse "fediverse_");
+
+#[derive(Deserialize)]
+pub struct Config {
+    #[serde(flatten, with = "prefix_fediverse")]
+    fediverse: megalodon::Config,
+    genius_access_token: String,
+    database_url: String,
+    artists: String,
+    #[serde(default)]
+    include_artist: bool,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
     color_eyre::install()?;
 
-    let mut conn = SqliteConnection::connect("sqlite://test.db").await?;
+    let config = envy::from_env::<Config>()?;
+
+    let mut conn = SqliteConnection::connect(&config.database_url).await?;
 
     sqlx::migrate!().run(&mut conn).await?;
 
-    let genius = genius::Genius::new(&env::var("GENIUS_ACCESS_TOKEN")?);
+    let genius = genius::Genius::new(&config.genius_access_token);
 
-    let artists = &["Mili (JPN)", "AWAAWA"];
+    let artists = config.artists.split(",").collect::<Vec<_>>();
 
-    if !is_initialized(&mut conn, artists).await? {
+    if !is_initialized(&mut conn, &artists).await? {
         info!("loading lyrics");
 
-        load_lyrics(&mut conn, &genius, artists).await?;
+        load_lyrics(&mut conn, &genius, &artists).await?;
     }
 
-    let lyric = post(
-        &mut conn,
-        Config {
-            access_token: String::new(),
-            instance: String::new(),
-            sns: SNS::Mastodon,
-            visibility: None,
-        },
-        true,
-    )
-    .await?;
-
-    println!("{lyric}");
+    post(&mut conn, config.fediverse, config.include_artist).await?;
 
     Ok(())
 }
