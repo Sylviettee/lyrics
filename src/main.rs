@@ -1,6 +1,12 @@
-mod models;
-mod genius;
+use std::env;
 
-fn main() {
-    println!("Hello, world!");
+mod genius;
+mod models;
+
+#[tokio::main]
+async fn main() {
+    let genius = genius::Genius::new(&env::var("GENIUS_ACCESS_TOKEN").unwrap());
+    let id = genius.get_artist_id("Mili (JPN)").await.unwrap();
+
+    println!("{id}")
 }
