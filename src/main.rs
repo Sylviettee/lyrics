@@ -14,4 +14,14 @@ async fn main() {
     let song = songs.first().unwrap();
 
     println!("{} - {}", song.title, song.artist_names);
+
+    let first_lyrics = genius.get_lyrics(&song.url).await.unwrap();
+
+    println!("{first_lyrics}");
+
+    println!("\n---\n");
+
+    let hero_lyrics = genius.get_lyrics("https://genius.com/Mili-jpn-hero-lyrics").await.unwrap();
+
+    println!("{hero_lyrics}")
 }

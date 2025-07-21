@@ -1,3 +1,4 @@
+use html_editor::{operation::*, Element, Node};
 use reqwest::Client;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use thiserror::Error;
@@ -24,8 +25,7 @@ trait Searchable: DeserializeOwned {
 pub struct Song {
     pub artist_names: String,
     pub title: String,
-    id: usize,
-    path: String,
+    pub url: String,
 }
 
 impl Searchable for Song {
@@ -70,6 +70,8 @@ pub enum Error {
     Reqwest(#[from] reqwest::Error),
     #[error("genius replied with error: {0}")]
     Genius(String),
+    #[error("failed to find lyrics")]
+    LyricsNotFound,
     #[error("entity was not found")]
     NotFound,
 }
@@ -200,5 +202,65 @@ impl Genius {
         }
 
         Ok(songs)
+    }
+
+    fn get_text(nodes: &[Node]) -> String {
+        let mut buff = String::new();
+
+        for child in nodes.iter() {
+            match child {
+                Node::Comment(_) => {}
+                Node::Doctype(_) => {}
+                Node::Text(t) => buff.push_str(t),
+                Node::Element(e) => {
+                    if e.name == "div"  {
+                        continue
+                    }
+
+                    if e.name == "br" {
+                        buff.push('\n');
+                    } else {
+                        buff.push_str(&Self::get_text(&e.children));
+                    }
+                },
+            }
+        }
+
+        buff
+    }
+
+    pub async fn get_lyrics(&self, url: &str) -> Result<String, Error> {
+        let html = self.client.get(url).send().await?.text().await?;
+
+        let dom = html_editor::try_parse(&html);
+
+        let root = dom.query(&Selector::from("#lyrics-root")).ok_or(Error::LyricsNotFound)?;
+
+        let lyrics = root
+            .children
+            .iter()
+            .filter_map(|n| n.as_element())
+            .filter_map(|e| {
+                let is_lyrics = e.attrs
+                    .iter()
+                    .any(|(k, v)| k == "data-lyrics-container" && v == "true");
+
+                if is_lyrics {
+                    let mut children = e.clone().children;
+
+                    children.push(Node::Element(Element::new("br", Vec::new(), Vec::new())));
+
+                    Some(children)
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .clone()
+            .collect::<Vec<_>>();
+
+        let text = Self::get_text(&lyrics).replace("\n\n\n", "\n\n");
+
+        Ok(html_escape::decode_html_entities(&text).trim().to_string())
     }
 }
