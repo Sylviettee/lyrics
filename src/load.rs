@@ -1,5 +1,5 @@
 use log::info;
-use sqlx::{Connection, SqliteConnection, query, query_as};
+use sqlx::{Connection, SqliteConnection, query, query_as, raw_sql};
 
 use crate::{
     error::Error,
@@ -73,7 +73,7 @@ pub async fn load_lyrics(
     genius: &genius::Genius,
     artists: &[&str],
 ) -> Result<(), Error> {
-    query!("DELETE FROM lyrics; DELETE FROM songs; DELETE FROM artists;",)
+    raw_sql("DELETE FROM lyrics; DELETE FROM songs; DELETE FROM artists;")
         .execute(&mut *conn)
         .await?;
 

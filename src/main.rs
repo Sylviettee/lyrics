@@ -1,5 +1,6 @@
 use std::env;
 
+use ::megalodon::SNS;
 use color_eyre::eyre::Result;
 use env_logger::Env;
 use log::info;
@@ -8,12 +9,14 @@ use sqlx::{Connection, SqliteConnection};
 use crate::{
     load::{is_initialized, load_lyrics},
     markov::generate,
+    megalodon::{Config, post},
 };
 
 mod error;
 mod genius;
 mod load;
 mod markov;
+mod megalodon;
 mod models;
 
 #[tokio::main]
@@ -35,9 +38,19 @@ async fn main() -> Result<()> {
         load_lyrics(&mut conn, &genius, artists).await?;
     }
 
-    let markov = generate(&mut conn).await?;
+    let lyric = post(
+        &mut conn,
+        Config {
+            access_token: String::new(),
+            instance: String::new(),
+            sns: SNS::Mastodon,
+            visibility: None,
+        },
+        true,
+    )
+    .await?;
 
-    println!("markov mili: {markov}");
+    println!("{lyric}");
 
     Ok(())
 }

@@ -17,3 +17,12 @@ pub struct Lyric {
     pub presented: bool,
     pub song_id: i64,
 }
+
+pub struct LyricSong {
+    pub id: i64,
+    pub contents: String,
+    pub presented: bool,
+    pub song_id: i64,
+    pub artists_names: String,
+    pub name: String,
+}
