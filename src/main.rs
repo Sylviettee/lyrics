@@ -5,10 +5,15 @@ use env_logger::Env;
 use log::info;
 use sqlx::{Connection, SqliteConnection};
 
-use crate::load::{is_initialized, load_lyrics};
+use crate::{
+    load::{is_initialized, load_lyrics},
+    markov::generate,
+};
 
+mod error;
 mod genius;
 mod load;
+mod markov;
 mod models;
 
 #[tokio::main]
@@ -29,6 +34,10 @@ async fn main() -> Result<()> {
 
         load_lyrics(&mut conn, &genius, artists).await?;
     }
+
+    let markov = generate(&mut conn).await?;
+
+    println!("markov mili: {markov}");
 
     Ok(())
 }

@@ -21,7 +21,7 @@ CREATE TABLE lyrics (
   id        INTEGER NOT NULL,
   contents  TEXT    NOT NULL,
   presented BOOLEAN NOT NULL DEFAULT FALSE,
-  song_id   INTEGER,
+  song_id   INTEGER NOT NULL,
 
   PRIMARY KEY (id),
   FOREIGN KEY (song_id) REFERENCES songs(id)

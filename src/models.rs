@@ -12,8 +12,8 @@ pub struct Song {
 }
 
 pub struct Lyric {
-    pub id: usize,
+    pub id: i64,
     pub contents: String,
     pub presented: bool,
-    pub song_id: usize,
+    pub song_id: i64,
 }

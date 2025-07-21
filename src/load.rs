@@ -1,19 +1,11 @@
 use log::info;
 use sqlx::{Connection, SqliteConnection, query, query_as};
-use thiserror::Error;
 
 use crate::{
+    error::Error,
     genius,
     models::{Artist, Song},
 };
-
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error("genius: {0}")]
-    Genius(#[from] genius::Error),
-    #[error("sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
-}
 
 async fn load_artist(
     conn: &mut SqliteConnection,
