@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+env_logger = "0.11.8"
 html-escape = "0.2.13"
 html_editor = "0.7.0"
+log = "0.4.27"
 megalodon = "1.0.2"
 reqwest = "0.12.22"
 serde = { version = "1.0.219", features = ["derive"] }

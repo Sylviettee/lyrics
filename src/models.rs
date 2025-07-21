@@ -1,21 +1,19 @@
 pub struct Artist {
-    id: usize,
-    name: String,
-    genius: String,
-    songs: usize,
+    pub id: i64,
+    pub name: String,
+    pub genius: i64,
 }
 
 pub struct Song {
-    id: usize,
-    name: String,
-    artist: String, // Mili / AWAAWA
-    explicit: bool,
-    album: Option<String>,
+    pub id: i64,
+    pub name: String,
+    pub artist_id: i64,
+    pub artists_names: String,
 }
 
 pub struct Lyric {
-    id: usize,
-    contents: String,
-    presented: bool,
-    song_id: usize,
+    pub id: usize,
+    pub contents: String,
+    pub presented: bool,
+    pub song_id: usize,
 }

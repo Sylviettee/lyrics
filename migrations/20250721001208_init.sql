@@ -1,21 +1,20 @@
 -- Add migration script here
-CREATE TABLE artist (
+CREATE TABLE artists (
   id     INTEGER NOT NULL,
   name   TEXT    NOT NULL,
-  genius TEXT    NOT NULL,
-  songs  INTEGER NOT NULL DEFAULT 0,
+  genius INTEGER NOT NULL,
 
   PRIMARY KEY (id)
 );
 
 CREATE TABLE songs (
-  id       INTEGER NOT NULL,
-  name     TEXT    NOT NULL,
-  artist   TEXT    NOT NULL,
-  explicit BOOLEAN NOT NULL DEFAULT FALSE,
-  album    TEXT,
+  id            INTEGER NOT NULL,
+  name          TEXT    NOT NULL,
+  artist_id     INTEGER NOT NULL,
+  artists_names TEXT    NOT NULL, -- collaborations...
 
-  PRIMARY KEY (id)
+  PRIMARY KEY (id),
+  FOREIGN KEY (artist_id) REFERENCES artists(id)
 );
 
 CREATE TABLE lyrics (

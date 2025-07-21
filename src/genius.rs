@@ -189,14 +189,12 @@ impl Genius {
             let page_songs = self
                 .get_artist_songs_paginated(artist_id, page, per_page)
                 .await?;
-            let len = page_songs.len();
 
-            songs.extend(page_songs);
-
-            if len != per_page {
-                // last page
+            if page_songs.is_empty() {
                 break;
             }
+
+            songs.extend(page_songs);
 
             page += 1;
         }

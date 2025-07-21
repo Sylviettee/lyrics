@@ -1,30 +1,21 @@
 use std::env;
 
+use sqlx::{Connection, SqliteConnection};
+
+use crate::load::load_lyrics;
+
 mod genius;
+mod load;
 mod models;
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     let genius = genius::Genius::new(&env::var("GENIUS_ACCESS_TOKEN").unwrap());
-    let id = genius.get_artist_id("Mili (JPN)").await.unwrap();
+    let mut conn = SqliteConnection::connect("sqlite://test.db").await.unwrap();
 
-    println!("{id}");
-
-    let songs = genius.get_artist_songs(id, Some(1)).await.unwrap();
-    let song = songs.first().unwrap();
-
-    println!("{} - {}", song.title, song.artist_names);
-
-    let first_lyrics = genius.get_lyrics(&song.url).await.unwrap();
-
-    println!("{first_lyrics}");
-
-    println!("\n---\n");
-
-    let hero_lyrics = genius
-        .get_lyrics("https://genius.com/Mili-jpn-hero-lyrics")
+    load_lyrics(&mut conn, &genius, &["Mili (JPN)"])
         .await
         .unwrap();
-
-    println!("{hero_lyrics}")
 }
