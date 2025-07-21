@@ -1,7 +1,14 @@
 use megalodon::{SNS, entities::StatusVisibility, megalodon::PostStatusInputOptions};
 use sqlx::{SqliteConnection, query, query_as};
 
-use crate::{error::Error, models::LyricSong};
+use crate::error::Error;
+
+struct LyricSong {
+    pub id: i64,
+    pub contents: String,
+    pub artists_names: String,
+    pub name: String,
+}
 
 pub struct Config {
     pub access_token: String,
@@ -17,7 +24,8 @@ pub async fn post(conn: &mut SqliteConnection, config: Config, dry: bool) -> Res
 
     let lyric = query_as!(
         LyricSong,
-        "SELECT lyrics.*, songs.artists_names, songs.name FROM lyrics
+        "SELECT lyrics.id, lyrics.contents, songs.artists_names, songs.name
+        FROM lyrics
         JOIN songs ON lyrics.id=songs.id
         WHERE presented = FALSE
         ORDER BY RANDOM()

@@ -8,16 +8,13 @@ use sqlx::{Connection, SqliteConnection};
 
 use crate::{
     load::{is_initialized, load_lyrics},
-    markov::generate,
     megalodon::{Config, post},
 };
 
 mod error;
 mod genius;
 mod load;
-mod markov;
 mod megalodon;
-mod models;
 
 #[tokio::main]
 async fn main() -> Result<()> {

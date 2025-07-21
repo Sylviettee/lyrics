@@ -1,11 +1,7 @@
 use log::info;
-use sqlx::{Connection, SqliteConnection, query, query_as, raw_sql};
+use sqlx::{Connection, SqliteConnection, query, raw_sql};
 
-use crate::{
-    error::Error,
-    genius,
-    models::{Artist, Song},
-};
+use crate::{error::Error, genius};
 
 async fn load_artist(
     conn: &mut SqliteConnection,
@@ -16,14 +12,14 @@ async fn load_artist(
 
     let genius_id = id as u32;
 
-    let artist = query_as!(
-        Artist,
-        "INSERT INTO artists (name, genius) VALUES (?, ?) RETURNING *",
+    let artist_id = query!(
+        "INSERT INTO artists (name, genius) VALUES (?, ?)",
         artist,
         genius_id,
     )
-    .fetch_one(&mut *conn)
-    .await?;
+    .execute(&mut *conn)
+    .await?
+    .last_insert_rowid();
 
     let songs = genius.get_artist_songs(id, None).await?;
 
@@ -38,15 +34,15 @@ async fn load_artist(
 
         let mut tx = conn.begin().await?;
 
-        let song = query_as!(
-            Song,
-            "INSERT INTO songs (name, artist_id, artists_names) VALUES (?, ?, ?) RETURNING *",
+        let song_id = query!(
+            "INSERT INTO songs (name, artist_id, artists_names) VALUES (?, ?, ?)",
             song.title,
-            artist.id,
+            artist_id,
             song.artist_names,
         )
-        .fetch_one(&mut *tx)
-        .await?;
+        .execute(&mut *tx)
+        .await?
+        .last_insert_rowid();
 
         let filtered_lyrics = lyrics
             .split("\n")
@@ -56,7 +52,7 @@ async fn load_artist(
             query!(
                 "INSERT INTO lyrics (contents, song_id) VALUES (?, ?)",
                 lyric,
-                song.id,
+                song_id,
             )
             .execute(&mut *tx)
             .await?;
