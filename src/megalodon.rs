@@ -20,15 +20,10 @@ pub struct Config {
     pub cw: Option<String>,
 }
 
-#[allow(clippy::result_large_err)]
-pub async fn post(
+pub async fn get_post(
     conn: &mut SqliteConnection,
-    config: Config,
     include_artist: bool,
-) -> Result<(), Error> {
-    let client =
-        megalodon::generator(config.sns, config.instance, Some(config.access_token), None)?;
-
+) -> Result<(String, i64), Error> {
     let lyric = query_as!(
         LyricSong,
         "SELECT lyrics.id, lyrics.contents, songs.artists_names, songs.name
@@ -50,6 +45,20 @@ pub async fn post(
         format!("{}\n<small>from {}</small>", lyric.contents, lyric.name)
     };
 
+    Ok((status, lyric.id))
+}
+
+#[allow(clippy::result_large_err)]
+pub async fn post(
+    conn: &mut SqliteConnection,
+    config: Config,
+    include_artist: bool,
+) -> Result<(), Error> {
+    let client =
+        megalodon::generator(config.sns, config.instance, Some(config.access_token), None)?;
+
+    let (status, lyric_id) = get_post(conn, include_artist).await?;
+
     client
         .post_status(
             status,
@@ -61,7 +70,7 @@ pub async fn post(
         )
         .await?;
 
-    query!("UPDATE lyrics SET presented = TRUE WHERE id = ?", lyric.id)
+    query!("UPDATE lyrics SET presented = TRUE WHERE id = ?", lyric_id)
         .execute(&mut *conn)
         .await?;
 

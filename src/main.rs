@@ -6,7 +6,7 @@ use sqlx::{Connection, SqliteConnection};
 
 use crate::{
     load::{is_initialized, load_lyrics},
-    megalodon::post,
+    megalodon::{get_post, post},
 };
 
 mod error;
@@ -19,12 +19,14 @@ serde_with::with_prefix!(prefix_fediverse "fediverse_");
 #[derive(Deserialize)]
 pub struct Config {
     #[serde(flatten, with = "prefix_fediverse")]
-    fediverse: megalodon::Config,
+    fediverse: Option<megalodon::Config>,
     genius_access_token: String,
     database_url: String,
     artists: String,
     #[serde(default)]
     include_artist: bool,
+    #[serde(default)]
+    dry_run: bool,
 }
 
 #[tokio::main]
@@ -48,7 +50,15 @@ async fn main() -> Result<()> {
         load_lyrics(&mut conn, &genius, &artists).await?;
     }
 
-    post(&mut conn, config.fediverse, config.include_artist).await?;
+    if let Some(fediverse) = config.fediverse
+        && !config.dry_run
+    {
+        post(&mut conn, fediverse, config.include_artist).await?;
+    } else {
+        let (status, _) = get_post(&mut conn, config.include_artist).await?;
+
+        println!("{status}");
+    }
 
     Ok(())
 }
