@@ -26,6 +26,7 @@ pub struct Song {
     pub artist_names: String,
     pub title: String,
     pub url: String,
+    pub id: usize,
 }
 
 impl Searchable for Song {

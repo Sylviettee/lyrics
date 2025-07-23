@@ -1,7 +1,78 @@
 use log::info;
-use sqlx::{Connection, SqliteConnection, query, raw_sql};
+use sqlx::{Connection, SqliteConnection, query};
 
-use crate::{error::Error, genius};
+use crate::{
+    error::Error,
+    genius::{self, Song},
+};
+
+async fn artist_rowid(
+    conn: &mut SqliteConnection,
+    artist_name: &str,
+    id: u32,
+) -> Result<i64, Error> {
+    let partial_artist = query!("SELECT id FROM artists WHERE genius = ?", id)
+        .fetch_optional(&mut *conn)
+        .await?;
+
+    if let Some(partial_artist) = partial_artist {
+        return Ok(partial_artist.id);
+    }
+
+    let artist_id = query!(
+        "INSERT INTO artists (name, genius) VALUES (?, ?)",
+        artist_name,
+        id,
+    )
+    .execute(&mut *conn)
+    .await?
+    .last_insert_rowid();
+
+    Ok(artist_id)
+}
+
+async fn song_rowid(
+    conn: &mut SqliteConnection,
+    artist_id: i64,
+    song: &Song,
+) -> Result<(i64, bool), Error> {
+    let partial_song = query!(
+        "SELECT id, genius FROM songs WHERE name = ? AND artist_id = ?",
+        song.title,
+        artist_id
+    )
+    .fetch_optional(&mut *conn)
+    .await?;
+
+    let genius = song.id as i64;
+
+    if let Some(partial_song) = partial_song {
+        if partial_song.genius != genius {
+            query!(
+                "UPDATE songs SET genius = ? WHERE id = ?",
+                genius,
+                partial_song.id
+            )
+            .execute(&mut *conn)
+            .await?;
+        }
+
+        return Ok((partial_song.id, true));
+    }
+
+    let song_id = query!(
+        "INSERT INTO songs (name, artist_id, artists_names, genius) VALUES (?, ?, ?, ?)",
+        song.title,
+        artist_id,
+        song.artist_names,
+        genius
+    )
+    .execute(&mut *conn)
+    .await?
+    .last_insert_rowid();
+
+    Ok((song_id, false))
+}
 
 async fn load_artist(
     conn: &mut SqliteConnection,
@@ -9,40 +80,33 @@ async fn load_artist(
     artist: &str,
 ) -> Result<(), Error> {
     let id = genius.get_artist_id(artist).await?;
-
-    let genius_id = id as u32;
-
-    let artist_id = query!(
-        "INSERT INTO artists (name, genius) VALUES (?, ?)",
-        artist,
-        genius_id,
-    )
-    .execute(&mut *conn)
-    .await?
-    .last_insert_rowid();
-
     let songs = genius.get_artist_songs(id, None).await?;
+
+    let artist_id = artist_rowid(conn, artist, id as u32).await?;
 
     // TODO; evaluate running in parallel (will this API-ban us?)
     for song in songs {
+        let mut tx = conn.begin().await?;
+
+        let (song_id, existed) = song_rowid(&mut tx, artist_id, &song).await?;
+
+        if existed {
+            tx.commit().await?;
+
+            info!(
+                "skipping {} by {}, lyrics already added",
+                song.title, song.artist_names
+            );
+
+            continue;
+        }
+
         info!(
             "fetching lyrics for {} by {}",
             song.title, song.artist_names
         );
 
         let lyrics = genius.get_lyrics(&song.url).await?;
-
-        let mut tx = conn.begin().await?;
-
-        let song_id = query!(
-            "INSERT INTO songs (name, artist_id, artists_names) VALUES (?, ?, ?)",
-            song.title,
-            artist_id,
-            song.artist_names,
-        )
-        .execute(&mut *tx)
-        .await?
-        .last_insert_rowid();
 
         let filtered_lyrics = lyrics
             .split("\n")
@@ -69,10 +133,6 @@ pub async fn load_lyrics(
     genius: &genius::Genius,
     artists: &[&str],
 ) -> Result<(), Error> {
-    raw_sql("DELETE FROM lyrics; DELETE FROM songs; DELETE FROM artists;")
-        .execute(&mut *conn)
-        .await?;
-
     for artist in artists {
         load_artist(conn, genius, artist).await?;
     }
@@ -100,5 +160,13 @@ pub async fn is_initialized(conn: &mut SqliteConnection, artists: &[&str]) -> Re
 
     let res = req.fetch_all(&mut *conn).await?;
 
-    Ok(res.len() == artists.len())
+    if res.len() != artists.len() {
+        return Ok(false);
+    }
+
+    let has_genius = query!("SELECT COUNT(*) AS count FROM songs WHERE genius = 0")
+        .fetch_one(&mut *conn)
+        .await?;
+
+    Ok(has_genius.count == 0)
 }
