@@ -6,7 +6,7 @@ use sqlx::{Connection, SqliteConnection};
 
 use crate::{
     load::{is_initialized, load_lyrics},
-    megalodon::{get_post, post},
+    megalodon::{TemplateConfig, get_post, post},
 };
 
 mod error;
@@ -15,16 +15,18 @@ mod load;
 mod megalodon;
 
 serde_with::with_prefix!(prefix_fediverse "fediverse_");
+serde_with::with_prefix!(prefix_template "template_");
 
 #[derive(Deserialize)]
 pub struct Config {
     #[serde(flatten, with = "prefix_fediverse")]
     fediverse: Option<megalodon::Config>,
+    #[serde(flatten, with = "prefix_template")]
+    template: TemplateConfig,
+
     genius_access_token: String,
     database_url: String,
     artists: String,
-    #[serde(default)]
-    include_artist: bool,
     #[serde(default)]
     dry_run: bool,
 }
@@ -53,9 +55,9 @@ async fn main() -> Result<()> {
     if let Some(fediverse) = config.fediverse
         && !config.dry_run
     {
-        post(&mut conn, fediverse, config.include_artist).await?;
+        post(&mut conn, fediverse, config.template).await?;
     } else {
-        let (status, _) = get_post(&mut conn, config.include_artist).await?;
+        let (status, _) = get_post(&mut conn, &config.template).await?;
 
         println!("{status}");
     }
