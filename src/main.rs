@@ -46,10 +46,12 @@ async fn main() -> Result<()> {
 
     let artists = config.artists.split(",").collect::<Vec<_>>();
 
-    if !is_initialized(&mut conn, &artists).await? {
+    let (initialized, song_has_genius) = is_initialized(&mut conn, &artists).await?;
+
+    if !initialized {
         info!("loading lyrics");
 
-        load_lyrics(&mut conn, &genius, &artists).await?;
+        load_lyrics(&mut conn, song_has_genius, &genius, &artists).await?;
     }
 
     if let Some(fediverse) = config.fediverse

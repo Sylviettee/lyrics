@@ -31,6 +31,27 @@ async fn artist_rowid(
     Ok(artist_id)
 }
 
+async fn insert_song(
+    conn: &mut SqliteConnection,
+    artist_id: i64,
+    song: &Song,
+) -> Result<i64, Error> {
+    let genius = song.id as i64;
+
+    let song_id = query!(
+        "INSERT INTO songs (name, artist_id, artists_names, genius) VALUES (?, ?, ?, ?)",
+        song.title,
+        artist_id,
+        song.artist_names,
+        genius
+    )
+    .execute(&mut *conn)
+    .await?
+    .last_insert_rowid();
+
+    Ok(song_id)
+}
+
 async fn song_rowid(
     conn: &mut SqliteConnection,
     artist_id: i64,
@@ -60,22 +81,30 @@ async fn song_rowid(
         return Ok((partial_song.id, true));
     }
 
-    let song_id = query!(
-        "INSERT INTO songs (name, artist_id, artists_names, genius) VALUES (?, ?, ?, ?)",
-        song.title,
-        artist_id,
-        song.artist_names,
-        genius
-    )
-    .execute(&mut *conn)
-    .await?
-    .last_insert_rowid();
+    Ok((insert_song(conn, artist_id, song).await?, false))
+}
 
-    Ok((song_id, false))
+async fn song_rowid_genius(
+    conn: &mut SqliteConnection,
+    artist_id: i64,
+    song: &Song,
+) -> Result<(i64, bool), Error> {
+    let genius = song.id as i64;
+
+    let partial_song = query!("SELECT id FROM songs WHERE genius = ?", genius,)
+        .fetch_optional(&mut *conn)
+        .await?;
+
+    if let Some(partial_song) = partial_song {
+        return Ok((partial_song.id, true));
+    }
+
+    Ok((insert_song(conn, artist_id, song).await?, false))
 }
 
 async fn load_artist(
     conn: &mut SqliteConnection,
+    song_has_genius: bool,
     genius: &genius::Genius,
     artist: &str,
 ) -> Result<(), Error> {
@@ -88,7 +117,11 @@ async fn load_artist(
     for song in songs {
         let mut tx = conn.begin().await?;
 
-        let (song_id, existed) = song_rowid(&mut tx, artist_id, &song).await?;
+        let (song_id, existed) = if song_has_genius {
+            song_rowid_genius(&mut tx, artist_id, &song).await?
+        } else {
+            song_rowid(&mut tx, artist_id, &song).await?
+        };
 
         if existed {
             tx.commit().await?;
@@ -130,17 +163,33 @@ async fn load_artist(
 
 pub async fn load_lyrics(
     conn: &mut SqliteConnection,
+    song_has_genius: bool,
     genius: &genius::Genius,
     artists: &[&str],
 ) -> Result<(), Error> {
     for artist in artists {
-        load_artist(conn, genius, artist).await?;
+        load_artist(conn, song_has_genius, genius, artist).await?;
     }
 
     Ok(())
 }
 
-pub async fn is_initialized(conn: &mut SqliteConnection, artists: &[&str]) -> Result<bool, Error> {
+pub async fn is_initialized(
+    conn: &mut SqliteConnection,
+    artists: &[&str],
+) -> Result<(bool, bool), Error> {
+    let has_genius = query!("SELECT COUNT(*) AS count FROM songs WHERE genius = 0")
+        .fetch_one(&mut *conn)
+        .await?;
+
+    let song_has_genius = has_genius.count == 0;
+
+    if song_has_genius {
+        info!("songs has genius column")
+    } else {
+        return Ok((false, true));
+    }
+
     let mut in_clause = Vec::new();
 
     for _artist in artists {
@@ -161,12 +210,8 @@ pub async fn is_initialized(conn: &mut SqliteConnection, artists: &[&str]) -> Re
     let res = req.fetch_all(&mut *conn).await?;
 
     if res.len() != artists.len() {
-        return Ok(false);
+        return Ok((false, song_has_genius));
     }
 
-    let has_genius = query!("SELECT COUNT(*) AS count FROM songs WHERE genius = 0")
-        .fetch_one(&mut *conn)
-        .await?;
-
-    Ok(has_genius.count == 0)
+    Ok((true, true))
 }
