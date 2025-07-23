@@ -29,6 +29,8 @@ pub struct Config {
     artists: String,
     #[serde(default)]
     dry_run: bool,
+    #[serde(default)]
+    update_db: bool,
 }
 
 #[tokio::main]
@@ -48,7 +50,7 @@ async fn main() -> Result<()> {
 
     let (initialized, song_has_genius) = is_initialized(&mut conn, &artists).await?;
 
-    if !initialized {
+    if !initialized || config.update_db {
         info!("loading lyrics");
 
         load_lyrics(&mut conn, song_has_genius, &genius, &artists).await?;
