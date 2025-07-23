@@ -60,7 +60,7 @@ pub async fn get_post(
     let status_template = if let Some(file) = &template.status {
         fs::read_to_string(file).await?
     } else {
-        String::from("{{{ contents }}}\n<small>from {{{ name }}}</name>")
+        String::from("{{{ contents }}}\n<small>from {{{ name }}}</small>")
     };
 
     let status = Handlebars::new().render_template(&status_template, &lyric)?;
